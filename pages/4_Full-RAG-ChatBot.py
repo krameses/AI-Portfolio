@@ -10,8 +10,8 @@ from langchain_community.vectorstores import FAISS
 
 from langchain_groq import ChatGroq
 
-from langchain.memory import ConversationBufferMemory
-from langchain.chains import ConversationalRetrievalChain
+from langchain_community.memory import ConversationBufferMemory
+from langchain_community.chains import ConversationalRetrievalChain
 
 # ---------------------------
 # Load environment variables
