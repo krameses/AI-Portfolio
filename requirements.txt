@@ -11,9 +11,15 @@ dotenv
 # Core LangChain ecosystem
 langchain
 langchain-community
-langchain-core
+langchain-
+langchain-text-splitters
 langchain-groq
 langchain-huggingface
 langchain_experimental
+langchain-memory
 openpyxl
 tabulate
+faiss-cpu
+sentence-transformers
+faiss-cpu
+sentence-transformers
