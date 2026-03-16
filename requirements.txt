@@ -11,7 +11,6 @@ dotenv
 # Core LangChain ecosystem
 langchain
 langchain-community
-langchain-
 langchain-text-splitters
 langchain-groq
 langchain-huggingface
