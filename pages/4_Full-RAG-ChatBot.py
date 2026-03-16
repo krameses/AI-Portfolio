@@ -1,6 +1,6 @@
-import streamlit as st
-import os
 from dotenv import load_dotenv
+import os
+import streamlit as st
 
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -9,112 +9,95 @@ from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
 
 from langchain_groq import ChatGroq
+from langchain.memory import ConversationBufferMemory
+from langchain.chains import ConversationalRetrievalChain
 
-from langchain_community.memory import ConversationBufferMemory
-from langchain_community.chains import ConversationalRetrievalChain
-
-# ---------------------------
 # Load environment variables
-# ---------------------------
-
 load_dotenv()
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
-st.title("📄 Chat with your PDF")
+st.title("📄 RAG PDF Chatbot")
 
 # ---------------------------
-# Upload PDF
+# Load and process PDF
 # ---------------------------
 
-uploaded_file = st.file_uploader("Upload a PDF", type="pdf")
+loader = PyPDFLoader("sample.pdf")
+documents = loader.load()
+
+text_splitter = RecursiveCharacterTextSplitter(
+    chunk_size=500,
+    chunk_overlap=50
+)
+
+docs = text_splitter.split_documents(documents)
+
+embeddings = HuggingFaceEmbeddings(
+    model_name="sentence-transformers/all-MiniLM-L6-v2"
+)
+
+vectorstore = FAISS.from_documents(docs, embeddings)
+retriever = vectorstore.as_retriever()
 
 # ---------------------------
-# Cache vector store
+# LLM
 # ---------------------------
 
-@st.cache_resource
-def create_vectorstore(pdf_path):
-
-    loader = PyPDFLoader(pdf_path)
-    documents = loader.load()
-
-    splitter = RecursiveCharacterTextSplitter(
-        chunk_size=500,
-        chunk_overlap=50
-    )
-
-    docs = splitter.split_documents(documents)
-
-    embeddings = HuggingFaceEmbeddings(
-        model_name="sentence-transformers/all-MiniLM-L6-v2"
-    )
-
-    vectorstore = FAISS.from_documents(docs, embeddings)
-
-    return vectorstore
+llm = ChatGroq(
+    model="llama-3.1-8b-instant",
+    groq_api_key=GROQ_API_KEY
+)
 
 # ---------------------------
-# If PDF uploaded
+# Memory
 # ---------------------------
 
-if uploaded_file:
+memory = ConversationBufferMemory(
+    memory_key="chat_history",
+    return_messages=True
+)
 
-    with open("temp.pdf", "wb") as f:
-        f.write(uploaded_file.read())
+qa_chain = ConversationalRetrievalChain.from_llm(
+    llm=llm,
+    retriever=retriever,
+    memory=memory
+)
 
-    vectorstore = create_vectorstore("temp.pdf")
-    retriever = vectorstore.as_retriever()
+# ---------------------------
+# Streamlit Chat Memory
+# ---------------------------
 
-    # ---------------------------
-    # LLM
-    # ---------------------------
+if "messages" not in st.session_state:
+    st.session_state.messages = []
 
-    llm = ChatGroq(
-        model="llama-3.1-8b-instant",
-        groq_api_key=GROQ_API_KEY
-    )
+# Display previous messages
+for msg in st.session_state.messages:
+    with st.chat_message(msg["role"]):
+        st.markdown(msg["content"])
 
-    memory = ConversationBufferMemory(
-        memory_key="chat_history",
-        return_messages=True
-    )
+# Chat input
+prompt = st.chat_input("Ask something about the PDF")
 
-    qa_chain = ConversationalRetrievalChain.from_llm(
-        llm=llm,
-        retriever=retriever,
-        memory=memory
-    )
+if prompt:
 
-    # ---------------------------
-    # Chat history
-    # ---------------------------
+    # Show user message
+    st.chat_message("user").markdown(prompt)
 
-    if "messages" not in st.session_state:
-        st.session_state.messages = []
+    st.session_state.messages.append({
+        "role": "user",
+        "content": prompt
+    })
 
-    for msg in st.session_state.messages:
-        with st.chat_message(msg["role"]):
-            st.markdown(msg["content"])
+    # Get response
+    response = qa_chain.invoke({"question": prompt})
 
-    prompt = st.chat_input("Ask something about the PDF")
+    answer = response["answer"]
 
-    if prompt:
+    # Show assistant message
+    with st.chat_message("assistant"):
+        st.markdown(answer)
 
-        st.chat_message("user").markdown(prompt)
-
-        st.session_state.messages.append({
-            "role": "user",
-            "content": prompt
-        })
-
-        response = qa_chain.invoke({"question": prompt})
-
-        answer = response["answer"]
-
-        with st.chat_message("assistant"):
-            st.markdown(answer)
-
-        st.session_state.messages.append({
-            "role": "assistant",
-            "content": answer
-        })
+    st.session_state.messages.append({
+        "role": "assistant",
+        "content": answer
+    })
